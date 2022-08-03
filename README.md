@@ -1343,3 +1343,134 @@ return nickNameFragmentBinding.root
  ****
 
 ### **🟧 최종 실행 - 닉네임 관련**
+
+## 🟦 48강. 회원 가입 처리
+
+### ▶️ 회원 가입 처리하기
+
+- 애플리케이션에서 입력한 회원 정보를 서버로 전달하여 서버/DB에 저장하는 작업을 처리한다.
+
+### **🟧 connector 역할**
+
+◾ C드라이브 - Program Files(x86) - MySQL -Connector J 8.0 → mysql-connector-java…jar 파일
+
+![Untitled](https://s3-us-west-2.amazonaws.com/secure.notion-static.com/ec083b57-ddda-4f4f-b51e-525cfba5f75a/Untitled.png)
+
+**→ 이클립스의 webapp의 lib 폴더에 복사하여 붙여넣어준다.**
+
+### **🟧 이클립스 jsp 파일에서 데이터 추출 작업**
+
+◾ join_user.jsp
+
+```java
+<%@ page language="java" contentType="text/html; charset=UTF-8"
+    pageEncoding="UTF-8"%>
+
+<%@ page import = "java.sql.*" %> 
+<%
+	//클라이언트가 전달하는 데이터의 한글 인코딩 설정
+	request.setCharacterEncoding("utf-8");
+	
+	//클라이언트가 전달한 데이터 추출 작업
+	String userId = request.getParameter("user_id");
+	String userPw = request.getParameter("user_pw");
+	String userNickName = request.getParameter("user_nick_name");
+	
+	//우선 단순 출력시켜보기
+	System.out.println(userId);
+	System.out.println(userPw);
+	System.out.println(userNickName);
+%>
+```
+
+### **🟧 안드로이드에 OkHttp 라이브러리 세팅 작업**
+
+◾ 1) build.gradle 에 dependency 추가
+
+`implementation 'com.squareup.okhttp3:okhttp:4.9.0'`
+
+◾ 2) AndroidManifest.xml에 다음을 추가
+
+`android:usesCleartextTraffic="true"`
+
+`<uses-permission android:name="android.permission.INTERNET"/>`
+
+◾ 3) NickNameFragment.kt 에 thread{}로 다음 코드 추가
+
+```kotlin
+thread{
+val client = OkHttpClient()
+    val site = "http://172.30.1.27:8080/App3_CommunityServer/join_user.jsp"
+
+    //서버로 보낼 데이터 세팅 - 넘어갈 데이터 변수 이름 일치 시켜주기
+    val builder1 = FormBody.Builder()
+    builder1.add("user_id", act.userId)
+    builder1.add("user_pw", act.userPw)
+    builder1.add("user_nick_name", act.userNickName)
+    val formBody = builder1.build()
+
+    //Request 생성 - Post 방식으로
+    val request = Request.Builder().url(site).post(formBody).build()
+    val response = client.newCall(request).execute()
+}
+```
+
+### ✅ 사용자 입력값이 연결한 서버에 데이터 보내지고 이클립스 콘솔창에 곧바로 출력된다.
+
+![Untitled](https://s3-us-west-2.amazonaws.com/secure.notion-static.com/19f7f4c2-f077-4e4a-a692-8d6db8d6c6d3/Untitled.png)
+
+### **🟧 데이터베이스 접속 처리**
+
+**◾ join_user.jsp** 
+
+- 여기서 DB 접속 정보 세팅해주고 연동 작업
+
+```kotlin
+<%@ page language="java" contentType="text/html; charset=UTF-8"
+    pageEncoding="UTF-8"%>
+
+<%@ page import = "java.sql.*" %> 
+<%
+	//클라이언트가 전달하는 데이터의 한글 인코딩 설정
+	request.setCharacterEncoding("utf-8");
+	
+	//클라이언트가 전달한 데이터 추출 작업
+	String userId = request.getParameter("user_id");
+	String userPw = request.getParameter("user_pw");
+	String userNickName = request.getParameter("user_nick_name");
+	
+	//우선 단순 출력시켜보기
+//	System.out.println(userId);
+//	System.out.println(userPw);
+//	System.out.println(userNickName);
+
+	//1) 데이터베이스 접속 정보 세팅 //("jdbc:mysql://localhost:3306/test?useUnicode=true&characterEncoding=utf8&serverTimezone=Asia/Seoul"
+	String dbUrl = "jdbc:mysql://localhost:3306/app3_community_db";
+	String dbId = "root";
+	String dbPw = "1234";
+	
+	Class.forName("com.mysql.cj.jdbc.Driver");
+	
+	//2) 데이터베이스 접속
+	Connection conn = DriverManager.getConnection(dbUrl, dbId, dbPw);
+	
+	//3) 쿼리문	
+	String sql = "insert into user_table" 
+				+ "(user_id, user_pw, user_autologin, user_nick_name)"
+				+ "values (?, ?, 0, ?)";
+	//4) 쿼리 실행 
+	PreparedStatement pstmt = conn.prepareStatement(sql);
+	pstmt.setString(1, userId);
+	pstmt.setString(2, userPw);
+	pstmt.setString(3, userNickName);
+	
+	pstmt.execute();//실행
+	
+	conn.close(); //DB 접속 종료 
+
+%>
+```
+
+![가입완료.png](https://s3-us-west-2.amazonaws.com/secure.notion-static.com/4411feb1-ed37-454b-87b7-1a15c8ab33c0/%EA%B0%80%EC%9E%85%EC%99%84%EB%A3%8C.png)
+
+**◾MySql 데이터베이스에도 가입 정보가 저장된 것을 확인 가능**
