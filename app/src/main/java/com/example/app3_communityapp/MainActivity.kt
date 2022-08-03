@@ -12,6 +12,12 @@ class MainActivity : AppCompatActivity() { //'메인' 액티비티
     // 프래그먼트 담을 변수 선언
     lateinit var currentFragment : Fragment
 
+    //사용자 정보 담을 변수 선언 - 여기에 데이터 담을 예정
+    var userId = ""
+    var userPw = ""
+    var userNickName = ""
+
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
 
