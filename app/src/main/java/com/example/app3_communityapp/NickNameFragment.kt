@@ -10,6 +10,10 @@ import android.view.View
 import android.view.ViewGroup
 import androidx.appcompat.app.AlertDialog
 import com.example.app3_communityapp.databinding.FragmentNickNameBinding
+import okhttp3.FormBody
+import okhttp3.OkHttpClient
+import okhttp3.Request
+import kotlin.concurrent.thread
 
 class NickNameFragment : Fragment() { // '닉네임 입력' 프래그먼트
     //바인딩 설정
@@ -50,13 +54,49 @@ class NickNameFragment : Fragment() { // '닉네임 입력' 프래그먼트
             val act = activity as MainActivity
             act.userNickName = nickNameNickName
 
-            Log.d("test", "${act.userId}")
-            Log.d("test", "${act.userPw}")
-            Log.d("test", "${act.userNickName}")
+            //Log.d("test", "${act.userId}")
+            //Log.d("test", "${act.userPw}")
+            //Log.d("test", "${act.userNickName}")
 
-            val mainIntent = Intent(requireContext(), MainActivity::class.java)
-            startActivity(mainIntent)
-            activity?.finish() //기존 액티비티 종료
+           thread {
+               val client = OkHttpClient()
+               val site = "http://172.30.1.27:8080/App3_CommunityServer/join_user.jsp"
+
+               //서버로 보낼 데이터 세팅 - 넘어갈 데이터 변수 이름 일치 시켜주기
+               val builder1 = FormBody.Builder()
+               builder1.add("user_id", act.userId)
+               builder1.add("user_pw", act.userPw)
+               builder1.add("user_nick_name", act.userNickName)
+               val formBody = builder1.build()
+
+               //Request 생성 - Post 방식으로
+               val request = Request.Builder().url(site).post(formBody).build()
+               val response = client.newCall(request).execute()
+
+               //가입 완료 처리
+               if(response.isSuccessful == true){
+                   activity?.runOnUiThread {
+                       val dialogBuilder = AlertDialog.Builder(requireContext())
+                       dialogBuilder.setTitle("가입 완료")
+                       dialogBuilder.setMessage("가입이 완료되었습니다")
+                       dialogBuilder.setPositiveButton("확인"){ dialogInterface: DialogInterface, i: Int ->
+                           val mainIntent = Intent(requireContext(), MainActivity::class.java)
+                           startActivity(mainIntent)
+                           activity?.finish()
+                       }
+                       dialogBuilder.show()
+                   }
+               } else {
+                   activity?.runOnUiThread {
+                       val dialogBuilder = AlertDialog.Builder(requireContext())
+                       dialogBuilder.setTitle("가입오류")
+                       dialogBuilder.setMessage("가입 오류가 발생하였습니다")
+                       dialogBuilder.setPositiveButton("확인", null)
+                       dialogBuilder.show()
+                   }
+               }
+           }
+
         }
 
         return nickNameFragmentBinding.root
