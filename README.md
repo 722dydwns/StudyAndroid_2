@@ -1569,3 +1569,336 @@ return loginFragmentBinding.root
 ```
 
 ### **🟧 최종 모습**
+
+## 🟦 50강. 로그인 처리
+
+### ▶️ 로그인 처리
+
+- **사용자가 로그인 화면에서 입력한 정보를 토대로** **로그인 처리**
+- **로그인 성공 시, 서버가 보내주는 사용자 정보를 Preference에 저장하는 처리를 수행**한다.
+- **앱(안드로이드)에서 서버로 사용자가 입력한 Id/pw 값을 보내주면, 서버에서는 해당 값에 일치하는 DB 상의 사용자 idx 값을 쿼리 실행하여 받아온 뒤, 다시 앱(안드로이드)로 보내주는 구조이다.**
+
+### 📍ResultSet 클래스
+
+- Statement 객체로 SELECT 문 사용 후 얻어온 레코드 값들을 테이블 형태로 갖는 객체 타입이다.
+- 실제 처리 결과 데이터 중 Index 정보만 갖고 있는 구조이기 때문에 next() 메소드를 이용하여 다음 row로 이동하면서 필요한 데이터를 가져오는 것이 필요하다.
+- 모든 작업이 끝난 뒤에는 close() 처리하고, 데이터베이스와의 연결을 관장하는 Connection 인스턴스 또한 종료시켜 연결 해제하는 게 필요하다.
+
+### 📍PreparedStatement
+
+- SQL문을 미리 만들어두고 변수를 따로 입력하는 방식
+- 효율성이나 유지보수 유리한 구조
+- 쿼리 결과를 받을 때, 가져온 결과 데이터 처리를 위해 ResultSet 객체가 필요한 것이 특징이다.
+
+### **🟧 서버 측 작업**
+
+◾ login_user.jsp
+
+```kotlin
+<%@ page language="java" contentType="text/html; charset=UTF-8"
+    pageEncoding="UTF-8"%>
+<%@ page import="java.sql.*" %>
+<%
+	//클라이언트가 보내주는 데이터 추출
+	String userId = request.getParameter("user_id");
+	String userPw = request.getParameter("user_pw");
+	
+	//DB 접속 계정 세팅
+	String dbUrl = "jdbc:mysql://localhost:3306/app3_community_db";
+	String dbId = "root";
+	String dbPw = "1234";
+	
+	Class.forName("com.mysql.cj.jdbc.Driver");
+	//DB 접속 처리 
+	Connection conn = DriverManager.getConnection(dbUrl, dbId, dbPw);
+	//SQL 쿼리문 작성 - 사용자 id/pw에 일치하는 idx값 가져올 것 
+	String sql = "select user_idx from user_table "
+			   + "where user_id = ? and user_pw = ?";
+	
+	PreparedStatement pstmt = conn.prepareStatement(sql);
+	pstmt.setString(1, userId);
+	pstmt.setString(2, userPw);
+	//가져온 데이터 받기 
+	ResultSet rs = pstmt.executeQuery();
+	boolean chk = rs.next(); //가져온 데이터 존재한 경우 T /아니면 F
+	
+	if(chk == false){ //가져온 데이터 없을 경우 
+		out.write("FAIL");
+	} else { //가져온 데이터 존재할 경우 
+		int user_idx = rs.getInt("user_idx"); //int 타입으로 idx값 받아두고 
+		out.write(user_idx + "");
+	}
+	
+	conn.close(); //DB 연결 끊기 
+%>
+```
+
+### **🟧 LoginFragment.kt**
+
+- 서버와 통신 작업 처리 - thread{ } 안에서 처리한다.
+
+### 📍FormBody
+
+- OkHttp 사용 시, Post 방식을 사용하면 요청할 body를 FormBody 형태로 데이터 몸통 생성
+
+### 📍**Preference 란 ?**
+
+- 안드로이드에서 기본적으로 제공해주는 간단한 데이터 저장 방식.
+- xml형태로 키-값 데이터 생성
+- putString()/ putInt() 등 API를 통해 데이터 저장 가능
+
+ putString(키, 값) / putInt(키, 값)
+
+```kotlin
+
+//-> 서버와 통신 처리
+            thread {
+                val client = OkHttpClient()
+                val site = "http://172.30.1.27:8080/App3_CommunityServer/login_user.jsp"
+
+                //서버로 전달할 데이터 몸통 세팅 처리
+                val builder1 = FormBody.Builder()
+                builder1.add("user_id", loginId)
+                builder1.add("user_pw", loginPw)
+                val formBody = builder1.build()
+
+                val request = Request.Builder().url(site).post(formBody).build()
+                val response = client.newCall(request).execute() //요청 수행
+
+                //통신 성공 여부에 따라 분기
+                if(response.isSuccessful == true) { //통신 정상 연결
+                    //응답 결과를 추출
+                    val result_text = response.body?.string()!!.trim()
+
+                    if(result_text == "FAIL" ) { //로그인 실패 시 처리
+                        activity?.runOnUiThread{
+                            val dialogBuilder = AlertDialog.Builder(requireContext())
+                            dialogBuilder.setTitle("로그인 실패")
+                            dialogBuilder.setMessage("아이디나 비번 잘못되었습니다.")
+                            dialogBuilder.setPositiveButton("확인"){ dialogInterface: DialogInterface, i: Int ->
+                                //입력한 칸 비워두고 - 자동로그인 체크 해제 - 자동 아이디 포커싱
+                                loginFragmentBinding.loginId.setText("")
+                                loginFragmentBinding.loginPw.setText("")
+                                loginFragmentBinding.loginAutologin.isChecked = false
+                                loginFragmentBinding.loginId.requestFocus()
+                            }
+                            dialogBuilder.show()
+                        }
+                    } else{ //로그인 성공 시 처리
+                        activity?.runOnUiThread {
+                            val dialogBuilder = AlertDialog.Builder(requireContext())
+                            dialogBuilder.setTitle("로그인 성공")
+                            dialogBuilder.setMessage("로그인에 성공하였습니다.")
+                            dialogBuilder.setPositiveButton("확인"){ dialogInterface: DialogInterface, i: Int ->
+
+                                // 사용자 정보를 preferences에 저장한다.
+                                val pref = activity?.getSharedPreferences("login_data", Context.MODE_PRIVATE)
+                                val editor = pref?.edit()
+
+                                //서버로부터 전달받는 데이터는 모두 String 형태이므로 받을 때 정수형 Integer로 형변환시켜서 받음
+                                //putString(키, 값) , putInt(키, 값) 형태
+                                
+                                editor?.putInt("login_user_idx", Integer.parseInt(result_text))
+                                editor?.putInt("login_auto_login", loginAutoLogin)
+                                editor?.commit()
+
+                                val boardMainIntent = Intent(requireContext(), BoardMainActivity::class.java)
+                                startActivity(boardMainIntent)
+                                activity?.finish()
+                            }
+                            dialogBuilder.show()
+                        }
+                    }
+                }else{ //통신 비정상인 경우
+                    val dialogBuilder = AlertDialog.Builder(requireContext())
+                    dialogBuilder.setTitle("로그인 오류")
+                    dialogBuilder.setMessage("로그인 오류 발생")
+                    dialogBuilder.setPositiveButton("확인", null)
+                    dialogBuilder.show()
+                }
+            }
+        }
+```
+
+### **🟧 최종 모습**
+
+**🔸회원 정보 DB 테이블 상태**
+
+![DB.png](https://s3-us-west-2.amazonaws.com/secure.notion-static.com/11760563-374b-4c6a-8894-4780e4a13b0f/DB.png)
+
+- 앱 화면에 사용자가 입력한 데이터값은 JSP로 서버에 보내진다. 서버에서는 해당 사용자 정보를 이용하여 DB 상에 존재하는 회원을 탐색한 뒤 ,
+
+    **(1) 존재X → FAIL 을 띄우고 : 로그인 실패** 
+
+    **(2) 존재 O → 해당 회원의 idx 값을 추출한다. : 로그인 성공**
+
+**1) DB 상 없는 회원 id/pw 로 로그인 시도 시 ,**
+
+![로그인실패.png](https://s3-us-west-2.amazonaws.com/secure.notion-static.com/e7c773e0-d7f9-44e2-bfd6-cb9a362fb1e8/%EB%A1%9C%EA%B7%B8%EC%9D%B8%EC%8B%A4%ED%8C%A8.png)
+
+**2) DB 상 존재하는 회원 id/pw 로그인 시도 시 ,**
+
+![로그인성공.png](https://s3-us-west-2.amazonaws.com/secure.notion-static.com/f668b96b-f556-4046-ae8f-fecd02c2fbf6/%EB%A1%9C%EA%B7%B8%EC%9D%B8%EC%84%B1%EA%B3%B5.png)
+
+- 앱에서는 서버로부터 받아온 회원 idx 값을 얻어서 Preference 형태로 각각의 값을 받아두고 로그인이 성공한 상태이므로 게시판 메인 화면으로 전환시켜준다.
+
+## 🟦 51강. 자동 로그인 구현
+
+### ▶️ 자동 로그인 기능
+
+- 로그인 화면에서 로그인 시도 시, ‘자동 로그인’을 체크했다면 다음 번 앱 실행 시 자동으로 로그인된 상태로 게시판 메인 화면으로 이동되도록 처리.
+- 서버 DB 상의 user_autologin 값을 확인하여 처리하는 구조로 작업할 예정.
+- 앱(안드로이드)에서 사용자가 선택한 자동 로그인 여부 데이터를 서버로 보내면, 서버에서는 해당 데이터를 추출하여 다시 DB 상에 저장한다.
+
+### **🟧 서버 ) login_user.jsp**
+
+- 사용자가 앱(안드로이드) 로그인 화면에 계정 정보 입력 시, ‘자동 로그인’ 체크 여부값을 formBody 몸통에 세팅해두어 전달했다.
+- login_user.jsp는 해당 데이터값을 받아서 서버 DB 상에 저장 시킨다.
+
+```kotlin
+<%@ page language="java" contentType="text/html; charset=UTF-8"
+    pageEncoding="UTF-8"%>
+<%@ page import="java.sql.*" %>
+<%
+	request.setCharacterEncoding("utf-8");
+
+	String userId = request.getParameter("user_id");
+	String userPw = request.getParameter("user_pw");
+	int user_autologin = Integer.parseInt(request.getParameter("user_autologin"));
+	
+	String dbUrl = "jdbc:mysql://localhost:3306/app3_community_db";
+	String dbId = "root";
+	String dbPw = "1234";
+	
+	Class.forName("com.mysql.cj.jdbc.Driver");
+	
+	Connection conn = DriverManager.getConnection(dbUrl, dbId, dbPw);
+	
+	String sql = "select user_idx from user_table "
+			   + "where user_id = ? and user_pw = ?";
+	
+	PreparedStatement pstmt = conn.prepareStatement(sql);
+	pstmt.setString(1, userId);
+	pstmt.setString(2, userPw);
+	
+	ResultSet rs = pstmt.executeQuery();
+	boolean chk = rs.next();
+	
+	if(chk == false){
+		out.write("FAIL");
+	} else {
+		int user_idx = rs.getInt("user_idx");
+		
+		String sql2 = "update user_table "
+				    + "set user_autologin = ? "
+				    + "where user_idx = ?";
+		
+		PreparedStatement pstmt2 = conn.prepareStatement(sql2);
+		pstmt2.setInt(1, user_autologin);
+		pstmt2.setInt(2, user_idx);
+		pstmt2.execute();
+		
+		out.write(user_idx + "");
+	}
+	
+	conn.close();
+%>
+```
+
+### **🟧 check_auto_login.jsp**
+
+- DB 상에 저장된 user_autologin 값을 추출 반환
+
+```kotlin
+<%@ page language="java" contentType="text/html; charset=UTF-8"
+    pageEncoding="UTF-8"%>
+<%@ page import="java.sql.*" %>
+<%
+	request.setCharacterEncoding("utf-8");
+	//Preferences에 저장된 현재 로그인한 User의 idx 값을 받는다 	
+	String str1 = request.getParameter("login_user_idx");
+	int login_user_idx = Integer.parseInt(str1);
+	
+	//DB 접속 세팅
+	String dbUrl = "jdbc:mysql://localhost:3306/app3_community_db";
+	String dbId = "root";
+	String dbPw = "1234";
+	
+	Class.forName("com.mysql.cj.jdbc.Driver");
+	
+	//DB 연결
+	Connection conn = DriverManager.getConnection(dbUrl, dbId, dbPw);
+	
+	//쿼리문 작성 
+	String sql = "select user_autologin from user_table "
+				+ "where user_idx = ?";
+	
+	PreparedStatement pstmt = conn.prepareStatement(sql);
+	pstmt.setInt(1, login_user_idx);
+	
+	//결과 받기
+	ResultSet rs = pstmt.executeQuery();
+	rs.next(); 
+	// DB 상에 저장되어 있는 해당 idx 값에 존재하는 autologin 여부를 받아옴 
+	int user_autologin = rs.getInt("user_autologin");
+	
+	conn.close();//종료 
+%>
+<%= user_autologin %> <!-- ?login_user_idx=1 값 출력함 -->
+```
+
+### **🟧  MainActivity.kt**
+
+- 여기서는 현재 로그인 User가 자동 로그인을 희망하는지에 따라 곧장 게시판 메인화면으로 전환해줄지에 대한 분기문을 작성한다.
+
+```kotlin
+
+override fun onCreate(savedInstanceState: Bundle?) {
+    super.onCreate(savedInstanceState)
+
+    mainActivityBinding = ActivityMainBinding.inflate(layoutInflater)
+    setContentView(mainActivityBinding.root)
+
+    //Preference에 저장된 현재 User 정보를 가져옴
+    // + 해당 User의 자동 로그인 희망 여부에 따른 화면 전환 분기문
+    val pref = getSharedPreferences("login_data", Context.MODE_PRIVATE)
+    val login_user_idx = pref.getInt("login_user_idx", -1)
+    val login_auto_login = pref.getInt("login_auto_login", -1) //-1은 deValue
+
+    if(login_auto_login == 1) { //자동로그인 희망 O
+thread{
+//서버로 보낼 데이터 세팅
+            val client = OkHttpClient()
+            val builder1 = FormBody.Builder()
+            builder1.add("login_user_idx", "$login_user_idx")
+            val formBody = builder1.build()
+            //서버 통신을 위한 세팅
+            val site = "http://172.30.1.27:8080/App3_CommunityServer/check_auto_login.jsp"
+            val request = Request.Builder().url(site).post(formBody).build()
+            val response = client.newCall(request).execute()
+
+            if(response.isSuccessful == true) { //통신 성공 시
+                val result_text = response.body?.string()!!.trim()
+                val chk = Integer.parseInt(result_text)
+                if(chk == 1) {
+                    val boardMainIntent = Intent(this, BoardMainActivity::class.java)
+                    startActivity(boardMainIntent)
+                    finish()
+                }else {
+                    fragmentController("login", false, false)
+                }
+            }
+}
+}else{
+        fragmentController("login", false, false)
+    }
+}
+```
+
+### **🟧 최종 모습**
+
+**1) (자동로그인 X) 로그인 시도 → (앱 종료) → 재시도 : 다시 로그인 프래그먼트 창이 뜬다.**
+
+![로그인X 최종.png](https://s3-us-west-2.amazonaws.com/secure.notion-static.com/da56ea41-4137-4307-955d-4268bf4b8858/%EB%A1%9C%EA%B7%B8%EC%9D%B8X_%EC%B5%9C%EC%A2%85.png)
+
+**2) (자동로그인O) 로그인 시도 → (앱 종료) → 재시도 : 곧바로 게시글 메인 화면으로 전환된다.**
