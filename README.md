@@ -1902,3 +1902,361 @@ thread{
 ![로그인X 최종.png](https://s3-us-west-2.amazonaws.com/secure.notion-static.com/da56ea41-4137-4307-955d-4268bf4b8858/%EB%A1%9C%EA%B7%B8%EC%9D%B8X_%EC%B5%9C%EC%A2%85.png)
 
 **2) (자동로그인O) 로그인 시도 → (앱 종료) → 재시도 : 곧바로 게시글 메인 화면으로 전환된다.**
+
+
+## 🟦 52강. 게시판 목록 가져오기
+
+### ▶️ 게시판 목록 가져오기
+
+- 게시글 목록 화면에서 게시판 목록 메뉴 데이터 구성한다.
+- 서버로부터 게시판 이름과 인덱스 번호를 받아와서 이를 토대로 앱의 스피너(메뉴)를 구성한다.
+
+---
+
+### **🟧 서버 정보 관리 클래스 생성**
+
+- 매번 서버와 연동을 위해 IP 주소를 가져와야 하는 것이 번거롭고, IP 주소의 변동이 있을 수 있기 때문에 별도의 서버 정보를 관리할 클래스를 생성해준다.
+    
+    **◾ ServerInfo.kt**
+    
+    - 이 곳에서 사용할 서버 IP 주소를 **companion object 객체**에 담는다.
+        
+        ```kotlin
+        package com.example.app3_communityapp
+        
+        class ServerInfo { //서버 정보 담은 클래스
+        
+            companion object{
+                const val SERVER_IP = "172.30.1.27"
+            }
+        }
+        ```
+        
+        # 📍 Companion Object란?
+        
+        - 자바의 static을 없애고 kotlin에서는 Companion Object라는 동반 객체를 사용하여 정적 멤버를 정의합니다.
+        - 또한, Companion에 이름을 설정하여 커스텀한 Companion Object를 만들 수 있습니다.
+        - 참고([https://www.bsidesoft.com/8187](https://www.bsidesoft.com/8187))
+        - 자바의 static과는 조금 차이점이 존재하는데 Companion Object도 객체이다 보니 변수에 할당할 수 있습니다.
+        - 하나의 클래스에서는 하나의 Companion Object만 생성할 수 있습니다.
+        - Companion Object 내부의 변수는 클래스 안에서 사용할 수 있습니다. 그러나 클래스 멤버 변수는 Companion Object 안에서 사용할 수 없습니다. Companion Object는 클래스 로딩하면서 생성되지만, 클래스 멤버변수는 클래스 인스턴스를 생성할 때 생성되기 때문에 멤버변수를 사용할 수 없습니다.
+
+**◾ MainActivity.kt** 
+
+- 이 메인 액티비티 안에서 ‘자동 로그인’ 처리 시 서버 통신을 위한 세팅하는 부분에
+
+위에서 생성해놓은 서버의 IP 정보 변수를 사용하여 변경시켜놓았다. 이제 매번 번거롭게 IP 주소 확인없이도 해당 변수로 IP 주소에 접근이 가능해졌다.
+
+```kotlin
+				. . . 
+
+ if(login_auto_login == 1) { //자동로그인 희망 O
+thread{
+								         . . . 
+
+            //서버 통신을 위한 세팅
+            val site = "http://${ServerInfo.SERVER_IP}:8080/App3_CommunityServer/check_auto_login.jsp"
+            val request = Request.Builder().url(site).post(formBody).build()
+            val response = client.newCall(request).execute()
+
+            if(response.isSuccessful == true) { //통신 성공 시
+                val result_text = response.body?.string()!!.trim()
+                val chk = Integer.parseInt(result_text)
+                if(chk == 1) {
+                    val boardMainIntent = Intent(this, BoardMainActivity::class.java)
+                    startActivity(boardMainIntent)
+                    finish()
+                }else {
+                    fragmentController("login", false, false)
+                }
+            }
+}
+}else{
+        fragmentController("login", false, false)
+    }
+}
+					 . . . 
+```
+
+**◾ LoginFragment.kt / NickNameFragment.kt** 
+
+- 여기에서도 서버와의 통신 처리 시 ip주소 부분에 위에서 정의한 변수로 대체해준다
+
+```kotlin
+
+//-> 서버와 통신 처리
+thread{
+val client = OkHttpClient()
+    val site = "http://${ServerInfo.SERVER_IP}/App3_CommunityServer/login_user.jsp"
+
+    //서버로 전달할 데이터 몸통 세팅 처리 - id/pw 값을 전달하고
+    val builder1 = FormBody.Builder()
+```
+
+---
+
+### **🟧 json-simple 라이브러리**
+
+- JSON 데이터 쉽게 처리하기 위한 자바 라이브러리
+    
+    ![라이브러리 파일 .png](https://s3-us-west-2.amazonaws.com/secure.notion-static.com/01d95b5c-f25b-4f7a-bbec-fc294f6d7443/%EB%9D%BC%EC%9D%B4%EB%B8%8C%EB%9F%AC%EB%A6%AC_%ED%8C%8C%EC%9D%BC_.png)
+    
+
+**◾ Json-simple 라이브러리 특징** 
+
+ 1)내부적으로 JSON 데이터 처리를 위해 Map과 List 사용
+
+2) JSON 데이터를 구문 분석하고 JSON 파일에 기록 가능
+
+3) 타사 라이브러리에 대한 의존성 없음
+
+4) 매우 가벼운 API이며 간단한 JSON 데이터 처리에 적합
+
+**◾ Json-simple 라이브러리 주요 클래스** 
+
+**org.json.simple Class JSONObejct**
+
+- JSON 객체를 추상화한 클래스로, java.util.HashMap 클래스를 상속받고 있으므로 대부분의 메소드가 HashMap 클래스로부터 상속받고 있습니다.
+
+**org.json.simple Class JSONArray**
+
+- JSON 배열을 추상화한 클래스로, java.util.ArrayList 클래스를 상속하고 있으므로 메소드 사용 방법은 대부분 ArrayList와 거의 흡사합니다.
+
+**org.json.simple Class JSONParser**
+
+- JSON 데이터를 파싱하는 기능을 구현한 클래스입니다.
+
+**org.json.simple Class JSONValue**
+
+- JSON 데이터를 다루기 위한 몇 가지 메소드드을 제공합니다.
+
+**org.json.simple Class JSONException**
+
+- JSONParser 클래스를 사용해서 파싱할 때 발생할 수 있는 예외 사항을 추상화한 클래스입니다.
+
+**◾이클립스 서버 프로젝트 속 src - webapp - WEB-INF의 하위 폴더인 lib 폴더에 json-simple.jar 파일을 담는다.**
+
+![Untitled](https://s3-us-west-2.amazonaws.com/secure.notion-static.com/6bd7bec3-772a-4e09-ad4c-4fed9a22212c/Untitled.png)
+
+### **🟧 서버 DB 속 데이터 가져와 JSON 형태로 변환시켜주기**
+
+- **1) DB 속 게시판 목록 정보 테이블**
+    
+    ![DB.png](https://s3-us-west-2.amazonaws.com/secure.notion-static.com/1b6a1fb3-e34b-4f0b-b64d-997f9fb1eb0b/DB.png)
+    
+
+- 2**) get_board_list.jsp**
+- DB 계정 접속해서 게시판 항목 데이터를 가져온다.
+- 가져온 데이터는 JSON 객체에 담는데, 한 항목 당 하나의 JSON 객체에 담고 더 이상 남은 데이터가 없을 때까지 반복문을 돌며 JSON 배열에 다시 JSON 객체를 담는 구조이다.
+
+```kotlin
+<%@ page language="java" contentType="text/html; charset=UTF-8"
+    pageEncoding="UTF-8"%>
+<%@ page import = "java.sql.*" %>
+<%@ page import = "org.json.simple.*" %>
+
+<%
+	//바로 DB 접속해서 게시판 목록 데이터 가져옴
+	String dbUrl = "jdbc:mysql://localhost:3306/app3_community_db";
+	String dbId = "root";
+	String dbPw = "1234";
+	
+	Class.forName("com.mysql.cj.jdbc.Driver");
+	
+	Connection conn = DriverManager.getConnection(dbUrl, dbId, dbPw);
+	
+	//쿼리문 작성 - idx 값 오름차순 정렬하여 게시판 idx, name 값 가져옴 
+	String sql = "select board_idx, board_name from board_table order by board_idx";
+		
+	//쿼리문 실행하여 데이터 가져오기 
+	PreparedStatement pstmt = conn.prepareStatement(sql);
+	ResultSet rs = pstmt.executeQuery();
+	
+	//게시판 항목 1개 구성에 대해 하나의 JSON 객체 단위로 생성할 것이다. 
+	// 그리고 그 JSON 객체를 배열로 만들어서 전체 게시판 항목을 관리할 것이다.
+	
+	JSONArray root = new JSONArray(); //배열 객체 생성 
+	//가져온 데이터 항목 수 만큼 반복
+	while(rs.next()) {
+		int boardIdx = rs.getInt("board_idx");
+		String boardName = rs.getString("board_name");
+		//가져온 데이터를 Json 객체 한개에 담는다. 
+		JSONObject obj = new JSONObject();
+		obj.put("board_idx", boardIdx);
+		obj.put("board_name", boardName);
+		
+		root.add(obj); //만든 항목 1개의 데이터 묶음 객체를 다시 JSON 배열에 담는다.
+	}
+	conn.close(); //연결 종료 
+%>
+ <!-- 위에서 담은 데이터는 JSON 문서로 만들어서 출력시켜줌  -->
+<%= root.toJSONString() %>
+```
+
+- 3**) 서버 위에 올라온 위 jsp는 다음처럼 JSON 형태로 게시판 목록 데이터를 화면에 보여준다.**
+
+![Untitled](https://s3-us-west-2.amazonaws.com/secure.notion-static.com/a60ce455-906f-470c-a14a-dd0676e12949/Untitled.png)
+
+     
+
+**📌 JSON 형태 데이터를 더 깔끔하게 보는 방법** 
+
+- 크롬 웹스토어 → Postman_Rest Client 확장하기
+    
+    ![설치.png](https://s3-us-west-2.amazonaws.com/secure.notion-static.com/5ce7f1af-737a-4765-b500-2c4facf9fb97/%EC%84%A4%EC%B9%98.png)
+    
+- 이 부분 클릭하여 실행하고 해당 jsp 주소 담아서 JSON 형태로 보게 되면 다음과 같이 깔끔하게 데이터를 확인 가능
+    
+    ![클릭.png](https://s3-us-west-2.amazonaws.com/secure.notion-static.com/0f2888d3-bdbf-4799-b6f8-fdbc882a9373/%ED%81%B4%EB%A6%AD.png)
+    
+    ![보기편하게.png](https://s3-us-west-2.amazonaws.com/secure.notion-static.com/469137b2-ab5c-4c7f-9b02-6e4f73836077/%EB%B3%B4%EA%B8%B0%ED%8E%B8%ED%95%98%EA%B2%8C.png)
+    
+
+### **🟧 앱(안드로이드)에서 서버에 데이터 요청하고 JSON 형태로 데이터 받아두기**
+
+**◾ BoardMainActivity.kt**
+
+- 서버로부터 받은 데이터를 담을 List 변수를 선언
+- 서버 통신 성공 후, 받은 데이터를 다시 위에 선언해둔 List 변수에 담아서 처리한다.
+
+```kotlin
+package com.example.app3_communityapp
+
+import androidx.appcompat.app.AppCompatActivity
+import android.os.Bundle
+import androidx.fragment.app.Fragment
+import androidx.fragment.app.FragmentManager
+import androidx.fragment.app.FragmentTransaction
+import com.example.app3_communityapp.databinding.ActivityBoardMainBinding
+import okhttp3.OkHttpClient
+import okhttp3.Request
+import org.json.JSONArray
+import kotlin.concurrent.thread
+
+class BoardMainActivity : AppCompatActivity() { //'게시판 메인' 액티비티
+
+    //바인딩 설정
+    lateinit var boardMainActivityBinding : ActivityBoardMainBinding
+
+    //관리할 프래그먼트 화면 변수
+    lateinit var currentFragment : Fragment
+
+    //게시글 목록 이름 / idx 받을 List 변수 선언
+    val boardNameList = ArrayList<String>()
+    val boardIndexList = ArrayList<Int>()
+
+    override fun onCreate(savedInstanceState: Bundle?) {
+        super.onCreate(savedInstanceState)
+        //바인딩
+        boardMainActivityBinding = ActivityBoardMainBinding.inflate(layoutInflater)
+        setContentView(boardMainActivityBinding.root)
+
+        //서버와의 통신
+thread{
+//통신 정보 세팅
+            val client = OkHttpClient()
+            val site = "http://${ServerInfo.SERVER_IP}:8080/App3_CommunityServer/get_board_list.jsp"
+
+            //GET 요청 - 가져오기만 할거라서 get / cf. 보내는 것도 필요할 땐 POSt ㅇ청
+            val request = Request.Builder().url(site).get().build()
+            val response = client.newCall(request).execute() //통신 실행
+
+            if(response.isSuccessful == true) { //정상 통신
+                //우선 서버 속 데이터를 공백 제거한 문자열 Text로 받앋고
+                val resultText = response.body?.string()!!.trim()
+                // 받아온 공백 제거 문자열 Text 데이터를 다시 JSON 형태의 배열에 담는다.
+                val root = JSONArray(resultText)
+                //반복문 돌리면서
+                for(i in 0untilroot.length()) {
+                    val obj = root.getJSONObject(i)
+                    //데이터 전체 받아온 뒤
+                    val boardIdx = obj.getInt("board_idx")
+                    val boardName = obj.getString("board_name")
+
+                    //여기서 선언해둔 데이터 받을 용도의의 List타입 변수에 차례로 담는다.
+                    boardIndexList.add(boardIdx)
+                    boardNameList.add(boardName)
+                }
+            }
+}
+
+//가장 초기 컨트롤 메소드
+        fragmentController("board_main", false, false)
+    }
+
+    //(1) 프래그먼트 '컨트롤' 메소드 (현재 프래그먼트이름/백스택 추가여부/애니메이션 동작 여부)
+    fun fragmentController(name:String, add:Boolean, animate:Boolean){
+        // 1) 현재 프래그먼트 이름값에 따라 분기
+        when(name){
+            "board_main" -> {
+                currentFragment = BoardMainFragment()
+            }
+            "board_read" -> {
+                currentFragment = BoardReadFragment()
+            }
+            "board_write" -> {
+                currentFragment = BoardWriteFragment()
+            }
+            "board_modify" -> {
+                currentFragment = BoardModifyFragment()
+            }
+        }
+        // 프래그먼트 관리자로 관리
+        val trans =supportFragmentManager.beginTransaction()
+        trans.replace(R.id.board_main_container, currentFragment)
+
+        // 2) 백스택 여부에 따라 분기
+        if (add == true) {
+            //현재 이름 프래그먼트를 백스택에 add 처리함 : 뒤로가기 대비
+            trans.addToBackStack(name)
+        }
+        // 3) 애니메이션 사용 여부 따라 분기
+        if(animate == true) {
+            trans.setTransition(FragmentTransaction.TRANSIT_FRAGMENT_OPEN)
+        }
+
+        trans.commit() //화면에 적용
+
+    }
+
+    // (2) 프래그먼트를 백스택에서 제거하는 메소드
+    fun fragmentRemoveBackStack(name:String) {
+supportFragmentManager.popBackStack(name, FragmentManager.POP_BACK_STACK_INCLUSIVE) //프래그먼트 매니저->제거 호출
+    }
+}
+```
+
+**◾ BoardMainFragment.kt**
+
+- 이 곳에서는 임시로 게시판 메뉴 항목 데이터를 arrayOf()로 임의 생성해둔 적이 있다.
+- 이 부분을 서버로부터 받은 데이터로 처리하도록 고친다.
+
+```kotlin
+//Menu 항목 (Dialog) 에 들어갈 부분을 임의로 우선 리스트타입으로 담아둠 -
+// ---> 서버 연동 후 서버에서 가져올 데이터 부분임
+val boardListData =arrayOf(
+    "전체글", "게시판1", "게시판2", "게시판3", "게시판4"
+)
+```
+
+- 근데 이부분에는 arrayList 타입은 받을 수 없어서 우선 액티비티에 연결한 뒤 가져온 boardNameList 데이터를 toTypeArray()로 형변환시켜서 세팅한다.
+
+```kotlin
+//(2) Toolbar 메뉴 클릭 이벤트 처리
+boardMainFragmentBinding.boardMainToolbar.setOnMenuItemClickListener{
+
+when(it.itemId) { //사용자 클릭한 '메뉴' 항목값에 따라 다이얼로그 띄우기
+        //메뉴 리스트 클릭 시
+        R.id.board_main_menu_board_list-> {
+
+            //arrayList타입으로는 가져올 수 없어서 액티비티 연결하여 가져옴
+            val act =activityas BoardMainActivity
+
+            val boardListBuilder = AlertDialog.Builder(requireContext())
+            boardListBuilder.setTitle("게시판 목록")
+            boardListBuilder.setNegativeButton("취소", null)
+            boardListBuilder.setItems(act.boardNameList.toTypedArray(), null)
+            boardListBuilder.show()
+```
+
+→ 뒷부분 다시 듣고 이해해서 채워넣기
