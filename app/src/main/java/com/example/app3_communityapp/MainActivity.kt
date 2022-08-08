@@ -43,7 +43,7 @@ class MainActivity : AppCompatActivity() { //'메인' 액티비티
                 builder1.add("login_user_idx", "$login_user_idx")
                 val formBody = builder1.build()
                 //서버 통신을 위한 세팅
-                val site = "http://172.30.1.27:8080/App3_CommunityServer/check_auto_login.jsp"
+                val site = "http://${ServerInfo.SERVER_IP}:8080/App3_CommunityServer/check_auto_login.jsp"
                 val request = Request.Builder().url(site).post(formBody).build()
                 val response = client.newCall(request).execute()
 

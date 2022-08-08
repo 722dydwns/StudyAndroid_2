@@ -1,5 +1,6 @@
 package com.example.app3_communityapp
 
+import android.content.DialogInterface
 import android.os.Bundle
 import androidx.fragment.app.Fragment
 import android.view.LayoutInflater
@@ -16,12 +17,6 @@ class BoardMainFragment : Fragment() { //'게시판 메인' 프래그먼트
     //바인딩 세팅
     lateinit var boardMainFragmentBinding : FragmentBoardMainBinding
 
-    //Menu 항목 (Dialog) 에 들어갈 부분을 임의로 우선 리스트타입으로 담아둠 -
-    // ---> 서버 연동 후 서버에서 가져올 데이터 부분임
-    val boardListData = arrayOf(
-        "전체글", "게시판1", "게시판2", "게시판3", "게시판4"
-    )
-
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
     }
@@ -31,8 +26,10 @@ class BoardMainFragment : Fragment() { //'게시판 메인' 프래그먼트
         savedInstanceState: Bundle?
     ): View? {
         // Inflate the layout for this fragment
+        val act = activity as BoardMainActivity
+
         boardMainFragmentBinding = FragmentBoardMainBinding.inflate(inflater)
-        boardMainFragmentBinding.boardMainToolbar.title = "게시판이름"
+        boardMainFragmentBinding.boardMainToolbar.title = act.boardNameList[act.selectedBoardType]
 
         //(1) Toolbar 관련 - 메뉴 xml 지정
         boardMainFragmentBinding.boardMainToolbar.inflateMenu(R.menu.board_main_menu)
@@ -42,10 +39,17 @@ class BoardMainFragment : Fragment() { //'게시판 메인' 프래그먼트
             when(it.itemId) { //사용자 클릭한 '메뉴' 항목값에 따라 다이얼로그 띄우기
                 //메뉴 리스트 클릭 시
                 R.id.board_main_menu_board_list -> {
+
+                    //arrayList타입으로는 가져올 수 없어서 액티비티 연결하여 가져옴
+                    val act = activity as BoardMainActivity
+
                     val boardListBuilder = AlertDialog.Builder(requireContext())
                     boardListBuilder.setTitle("게시판 목록")
                     boardListBuilder.setNegativeButton("취소", null)
-                    boardListBuilder.setItems(boardListData, null)
+                    boardListBuilder.setItems(act.boardNameList.toTypedArray()) { dialogInterface: DialogInterface, i: Int ->
+                        act.selectedBoardType = i
+                        boardMainFragmentBinding.boardMainToolbar.title = act.boardNameList[act.selectedBoardType]
+                    }
                     boardListBuilder.show()
                     true
                 }

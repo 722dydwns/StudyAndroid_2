@@ -60,7 +60,7 @@ class NickNameFragment : Fragment() { // '닉네임 입력' 프래그먼트
 
            thread {
                val client = OkHttpClient()
-               val site = "http://172.30.1.27:8080/App3_CommunityServer/join_user.jsp"
+               val site = "http://${ServerInfo.SERVER_IP}:8080/App3_CommunityServer/join_user.jsp"
 
                //서버로 보낼 데이터 세팅 - 넘어갈 데이터 변수 이름 일치 시켜주기
                val builder1 = FormBody.Builder()

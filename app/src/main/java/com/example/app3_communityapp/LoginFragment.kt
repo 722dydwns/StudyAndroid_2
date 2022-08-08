@@ -87,7 +87,7 @@ class LoginFragment : Fragment() { //'로그인' 프래그먼트
             //-> 서버와 통신 처리
             thread {
                 val client = OkHttpClient()
-                val site = "http://172.30.1.27:8080/App3_CommunityServer/login_user.jsp"
+                val site = "http://${ServerInfo.SERVER_IP}/App3_CommunityServer/login_user.jsp"
 
                 //서버로 전달할 데이터 몸통 세팅 처리 - id/pw 값을 전달하고
                 val builder1 = FormBody.Builder()
